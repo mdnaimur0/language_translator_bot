@@ -10,11 +10,11 @@ const userSheet = SpreadsheetApp.openById(
 ).getSheetByName("Users");
 
 // For local work
-const { tgbot } = require("google-apps-script-telegram-bot-library");
-var bot = new tgbot(BOT_TOKEN);
+// const { tgbot } = require("google-apps-script-telegram-bot-library");
+// var bot = new tgbot(BOT_TOKEN);
 
 // For google apps script
-// var bot = new TGbot.tgbot(BOT_TOKEN);
+var bot = new TGbot.tgbot(BOT_TOKEN);
 
 function test() {
   var text = Math.ceil(5.01);
@@ -41,7 +41,11 @@ function handleCommand(update) {
       text: "Hello there, I can translate text for you from any language to another.",
     });
   } else if (command == "/set") {
-    // return sendLanguageList(1, chatId);
+    bot.sendMessage({
+      chat_id: chatId,
+      text: "Select default language for text to be translated to:",
+      reply_markup: getLanguageButtonsMarkup(1, chatId),
+    });
   } else if (command == "/list") {
     var text = "";
     languages.forEach((lang) => {
@@ -70,8 +74,8 @@ function handleCommand(update) {
   }
 }
 
-function handleNonCommand(query) {
-  var message = query.message;
+function handleNonCommand(update) {
+  var message = update.message;
   var msgId = message.message_id;
   var chatId = message.from.id;
   var text = message.text;
@@ -106,17 +110,23 @@ function handleNonCommand(query) {
 }
 
 function handleCallbackQuery(query) {
-  var chatId = query.from.id;
+  var from = query.from;
+  var chatId = from.id;
   var msgId = query.message.message_id;
-  var name =
-    query.from.first_name +
-    (query.from.last_name ? " " + query.from.last_name : "");
+  var name = from.first_name + (from.last_name ? " " + from.last_name : "");
   var data = query.data;
   if (data.startsWith("/set")) {
     var langCode = data.substr(5);
     var offset = parseInt(langCode);
     if (offset) {
-      return sendLanguageList(offset, chatId, msgId);
+      bot.editMessageText({
+        chat_id: chatId,
+        message_id: msgId,
+        text: "Select default language for text to be translated to:",
+        reply_markup: getLanguageButtonsMarkup(offset, chatId),
+      });
+      bot.editMessageText()
+      return;
     }
     saveDefaultLanguage(chatId, name, langCode);
     var langName = "";
@@ -126,21 +136,23 @@ function handleCallbackQuery(query) {
         break;
       }
     }
-    return editBotMessage(
-      chatId,
-      msgId,
-      `Successfully set the language to ${langName} (${langCode})`
-    );
+    bot.editMessageText({
+      chat_id: chatId,
+      message_id: msgId,
+      text: `Successfully set the language to ${langName} (${langCode})`,
+    });
   }
 }
 
-function sendLanguageList(offset, chatId, msgId) {
+function getLanguageButtonsMarkup(offset, chatId) {
   var buttons = [];
   var row = [];
   var defaultLang = getDefaultLanguage(chatId);
-  getLanguageList(offset).forEach((lang) => {
+  var list = getLanguageList(offset);
+  for (var i = 0; i < list.length; i++) {
+    var lang = list[i];
     var btn = {
-      text: lang.code == defaultLang ? "✅ " + lang.name : lang.name,
+      text: lang.code === defaultLang ? "✅ " + lang.name : lang.name,
       callback_data: "/set " + lang.code,
     };
     if (row.length < 3) {
@@ -148,49 +160,29 @@ function sendLanguageList(offset, chatId, msgId) {
     } else {
       buttons.push(row);
       row = [];
-      if (buttons.length == 6) {
-        if (offset == 1) {
-          buttons.push([
-            {
-              text: "->",
-              callback_data: `/set ${offset + 1}`,
-            },
-          ]);
-        } else if (offset == Math.ceil(languages.length / 24)) {
-          buttons.push([
-            {
-              text: "<-",
-              callback_data: `/set ${offset - 1}`,
-            },
-          ]);
-        } else {
-          buttons.push([
-            {
-              text: "<-",
-              callback_data: `/set ${offset - 1}`,
-            },
-            {
-              text: "->",
-              callback_data: `/set ${offset + 1}`,
-            },
-          ]);
-        }
-      }
+      row.push(btn);
     }
-  });
-  if (offset == 1)
-    return replyToSender(
-      chatId,
-      "Select deafult language for text to be translated to:",
-      { inline_keyboard: buttons }
-    );
-  else
-    return editBotMessage(
-      chatId,
-      msgId,
-      "Select deafult language for text to be translated to:",
-      { inline_keyboard: buttons }
-    );
+  }
+  buttons.push(row);
+  row = [];
+  if (offset > 1) {
+    row.push({ text: "<-", callback_data: `/set ${offset - 1}` });
+  }
+  if (offset < Math.ceil(languages.length / 24)) {
+    row.push({ text: "->", callback_data: `/set ${offset + 1}` });
+  }
+  buttons.push(row);
+  return { 'inline_keyboard': buttons };
+}
+
+function getLanguageList(offset) {
+  var length = languages.length;
+  var maxOffset = Math.ceil(length / 24);
+  if (offset < maxOffset) {
+    return languages.slice((offset - 1) * 24, offset * 24);
+  } else {
+    return languages.slice((offset - 1) * 24, length);
+  }
 }
 
 // sheet realted methods
@@ -223,16 +215,6 @@ function resetDefaultLanguage(chatId) {
   }
 }
 
-function getLanguageList(offset) {
-  var length = languages.length;
-  var maxOffset = Math.ceil(length / 24);
-  if (offset < maxOffset) {
-    return languages.slice((offset - 1) * 24, offset * 24);
-  } else {
-    return languages.slice((offset - 1) * 24, length);
-  }
-}
-
 // Utilities
 
 function getCurrentDate() {
@@ -241,7 +223,6 @@ function getCurrentDate() {
 }
 
 // Sheet tasks
-
 function saveRequest(update) {
   var chat = update.message.chat;
 
