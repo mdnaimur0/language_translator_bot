@@ -2,7 +2,15 @@
   "timeZone": "Asia/Dhaka",
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
-  "dependencies": {},
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "TGbot",
+        "version": "2",
+        "libraryId": "1XyHWbpiDtyHFEcZ0AOlsJp8DL99ax2R9HvehtjYg3vlLK4DDbiPyZ9eI"
+      }
+    ]
+  },
   "webapp": {
     "executeAs": "USER_DEPLOYING",
     "access": "ANYONE_ANONYMOUS"
