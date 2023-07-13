@@ -1,9 +1,17 @@
+import { tgbot } from "google-apps-script-telegram-bot-library";
+
 const BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('botToken');
 const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/`;
 const BMC_URL = 'https://www.buymeacoffee.com/mdnaimur';
 const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxgW8ur_JH19DdjKA96aBN0r74JkYEkiWvXfOA9rDvk0rg-GS6AKPNxT_e8w0Z37Xs4w/exec';
 
 const userSheet = SpreadsheetApp.openById("1C7cNMlG468pAqN9pYllYR15ZjCR0rJi3Jh42R7lD670").getSheetByName("Users");
+
+// For local work
+var bot = new tgbot(BOT_TOKEN);
+
+// For google apps script
+// var bot = new TGbot.tgbot(BOT_TOKEN); 
 
 function test() {
   var text = Math.ceil(5.01);
@@ -26,7 +34,8 @@ function handleCommand(update) {
   var command = update.message.text;
   var chatId = update.message.from.id;
   if (command == "/start")
-    return replyToSender(chatId, "Hello there, how can I help you?");
+    //return replyToSender(chatId, "Hello there, how can I help you?");
+    bot.sendMessage(chat_id= chatId, text="Hello there, how can I help you? new");
   if (command == "/set") {
     return sendLanguageList(1, chatId);
   }
