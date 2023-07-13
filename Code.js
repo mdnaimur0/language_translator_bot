@@ -1,17 +1,20 @@
-import { tgbot } from "google-apps-script-telegram-bot-library";
-
-const BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('botToken');
+const BOT_TOKEN =
+  PropertiesService.getScriptProperties().getProperty("botToken");
 const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/`;
-const BMC_URL = 'https://www.buymeacoffee.com/mdnaimur';
-const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwxgW8ur_JH19DdjKA96aBN0r74JkYEkiWvXfOA9rDvk0rg-GS6AKPNxT_e8w0Z37Xs4w/exec';
+const BMC_URL = "https://www.buymeacoffee.com/mdnaimur";
+const WEBHOOK_URL =
+  "https://script.google.com/macros/s/AKfycbwxgW8ur_JH19DdjKA96aBN0r74JkYEkiWvXfOA9rDvk0rg-GS6AKPNxT_e8w0Z37Xs4w/exec";
 
-const userSheet = SpreadsheetApp.openById("1C7cNMlG468pAqN9pYllYR15ZjCR0rJi3Jh42R7lD670").getSheetByName("Users");
+const userSheet = SpreadsheetApp.openById(
+  "1C7cNMlG468pAqN9pYllYR15ZjCR0rJi3Jh42R7lD670"
+).getSheetByName("Users");
 
 // For local work
+const { tgbot } = require("google-apps-script-telegram-bot-library");
 var bot = new tgbot(BOT_TOKEN);
 
 // For google apps script
-// var bot = new TGbot.tgbot(BOT_TOKEN); 
+// var bot = new TGbot.tgbot(BOT_TOKEN);
 
 function test() {
   var text = Math.ceil(5.01);
@@ -30,31 +33,41 @@ function doPost(e) {
 }
 
 function handleCommand(update) {
-  var reply = "Invalid command!";
   var command = update.message.text;
   var chatId = update.message.from.id;
-  if (command == "/start")
-    //return replyToSender(chatId, "Hello there, how can I help you?");
-    bot.sendMessage(chat_id= chatId, text="Hello there, how can I help you? new");
-  if (command == "/set") {
-    return sendLanguageList(1, chatId);
-  }
-  if (command == "/list") {
-    var text = '';
-    languages.forEach((lang) => {
-      text = text + '\n' + lang.code + ' -> ' + lang.name;
+  if (command == "/start") {
+    bot.sendMessage({
+      chat_id: chatId,
+      text: "Hello there, I can translate text for you from any language to another.",
     });
-    return replyToSender(chatId, `All supported languages are listed here:\n_Language Code -> Language name_\n ${text}`);
-  }
-  if (command == "/remove") {
+  } else if (command == "/set") {
+    // return sendLanguageList(1, chatId);
+  } else if (command == "/list") {
+    var text = "";
+    languages.forEach((lang) => {
+      text = text + "\n" + lang.code + " -> " + lang.name;
+    });
+    bot.sendMessage({
+      chat_id: chatId,
+      text: `All supported languages are listed here:\n<b>Language Code -> Language name</b>\n ${text}`,
+      parse_mode: "html",
+    });
+  } else if (command == "/remove") {
     resetDefaultLanguage(chatId);
-    return replyToSender(chatId, "Custom language removed and translation language is reset to English (en)");
+    bot.sendMessage({
+      chat_id: chatId,
+      text: "Custom language removed and translation language is reset to English (en)",
+    });
+  } else if (command == "/help") {
+    var text = `Hi ${update.message.from.first_name},\n\nYou can send me any text that you want to translate. Please follow the following format.\n\n\`text to translate | language-code\`\n\nExample: \`Hello there | bn\`\n\nUse /list to know language codes.\n\n_If you do not specify any language code, the given text will be translated to English or the default language you have set using_ /set.`;
+    bot.sendMessage({ chat_id: chatId, text: text, parse_mode: "markdown" });
+  } else {
+    bot.sendMessage({
+      chat_id: chatId,
+      reply_to_message_id: update.message.message_id,
+      text: "Invalid command!",
+    });
   }
-  if (command == "/help") {
-    var text = `Hi ${update.message.from.first_name},\n\nYou can send me any text that you want to translate. Please follow the following format.\n\n\`text to translate | language-code\`\n\nExample: \`Hello there | bn\`\n\nUse /list to know language codes.\n\n_If you do not specify any language code, the given text will be translated to English or the default language you have set using_ /set.`
-    return replyToSender(chatId, text);
-  }
-  return replyToMessage(chatId, reply, update.message.message_id);
 }
 
 function handleNonCommand(query) {
@@ -62,10 +75,11 @@ function handleNonCommand(query) {
   var msgId = message.message_id;
   var chatId = message.from.id;
   var text = message.text;
+  var response = "Sorry! I couldn't translate your text.";
   if (text) {
     var textToTranslate = text;
-    var toLang = '';
-    if (text.includes('|')) {
+    var toLang = "";
+    if (text.includes("|")) {
       var split = text.split("|");
       textToTranslate = split[0].trim();
       toLang = split[1].trim();
@@ -73,26 +87,30 @@ function handleNonCommand(query) {
       toLang = getDefaultLanguage(chatId);
     }
     if (textToTranslate.trim() === "") {
-      return replyToMessage(chatId, "No text to translate!", msgId);
-    }
-    try {
-      var res = LanguageApp.translate(textToTranslate, '', toLang);
-      if (res) {
-        return replyToMessage(chatId, res, msgId);
+      response = "No text to translate!";
+    } else {
+      try {
+        response = LanguageApp.translate(textToTranslate, "", toLang);
+      } catch (error) {
+        Logger.log(error);
       }
     }
-    catch (error) {
-      Logger.log(error);
-    }
-    return replyToMessage(chatId, "Sorry! I couldn't translate your text.", msgId);
+  } else {
+    response = "Unsupported message format!";
   }
-  return replyToMessage(chatId, "Unsupported message format!", msgId);
+  bot.sendMessage({
+    chat_id: chatId,
+    reply_to_message_id: msgId,
+    text: response,
+  });
 }
 
 function handleCallbackQuery(query) {
   var chatId = query.from.id;
   var msgId = query.message.message_id;
-  var name = query.from.first_name + ((query.from.last_name) ? " " + query.from.last_name : "");
+  var name =
+    query.from.first_name +
+    (query.from.last_name ? " " + query.from.last_name : "");
   var data = query.data;
   if (data.startsWith("/set")) {
     var langCode = data.substr(5);
@@ -100,11 +118,7 @@ function handleCallbackQuery(query) {
     if (offset) {
       return sendLanguageList(offset, chatId, msgId);
     }
-    saveDefaultLanguage(
-      chatId,
-      name,
-      langCode
-    );
+    saveDefaultLanguage(chatId, name, langCode);
     var langName = "";
     for (var i = 0; i < languages.length; i++) {
       if (languages[i].code == langCode) {
@@ -112,7 +126,11 @@ function handleCallbackQuery(query) {
         break;
       }
     }
-    return editBotMessage(chatId, msgId, `Successfully set the language to ${langName} (${langCode})`);
+    return editBotMessage(
+      chatId,
+      msgId,
+      `Successfully set the language to ${langName} (${langCode})`
+    );
   }
 }
 
@@ -122,8 +140,8 @@ function sendLanguageList(offset, chatId, msgId) {
   var defaultLang = getDefaultLanguage(chatId);
   getLanguageList(offset).forEach((lang) => {
     var btn = {
-      "text": lang.code == defaultLang ? "✅ " + lang.name : lang.name,
-      'callback_data': '/set ' + lang.code
+      text: lang.code == defaultLang ? "✅ " + lang.name : lang.name,
+      callback_data: "/set " + lang.code,
     };
     if (row.length < 3) {
       row.push(btn);
@@ -134,36 +152,45 @@ function sendLanguageList(offset, chatId, msgId) {
         if (offset == 1) {
           buttons.push([
             {
-              "text": '->',
-              'callback_data': `/set ${offset + 1}`
-            }
+              text: "->",
+              callback_data: `/set ${offset + 1}`,
+            },
           ]);
         } else if (offset == Math.ceil(languages.length / 24)) {
           buttons.push([
             {
-              "text": '<-',
-              'callback_data': `/set ${offset - 1}`
-            }
+              text: "<-",
+              callback_data: `/set ${offset - 1}`,
+            },
           ]);
         } else {
           buttons.push([
             {
-              "text": '<-',
-              'callback_data': `/set ${offset - 1}`
+              text: "<-",
+              callback_data: `/set ${offset - 1}`,
             },
             {
-              "text": '->',
-              'callback_data': `/set ${offset + 1}`
-            }
+              text: "->",
+              callback_data: `/set ${offset + 1}`,
+            },
           ]);
         }
       }
     }
   });
   if (offset == 1)
-    return replyToSender(chatId, "Select deafult language for text to be translated to:", { 'inline_keyboard': buttons });
+    return replyToSender(
+      chatId,
+      "Select deafult language for text to be translated to:",
+      { inline_keyboard: buttons }
+    );
   else
-    return editBotMessage(chatId, msgId, "Select deafult language for text to be translated to:", { 'inline_keyboard': buttons });
+    return editBotMessage(
+      chatId,
+      msgId,
+      "Select deafult language for text to be translated to:",
+      { inline_keyboard: buttons }
+    );
 }
 
 // sheet realted methods
@@ -192,7 +219,7 @@ function resetDefaultLanguage(chatId) {
   var chatIdColumn = userSheet.getRange("A:A").getValues().flat();
   var index = chatIdColumn.indexOf(chatId);
   if (index > -1) {
-    userSheet.getRange(index + 1, 3).setValue('en');
+    userSheet.getRange(index + 1, 3).setValue("en");
   }
 }
 
@@ -204,69 +231,6 @@ function getLanguageList(offset) {
   } else {
     return languages.slice((offset - 1) * 24, length);
   }
-}
-
-// Telegram related methods
-
-function editBotMessage(chatId, message_id, message, reply_markup = null) {
-  return requestTelegramAPI('editMessageText', {
-    'chat_id': chatId,
-    'text': message,
-    'message_id': message_id,
-    'parse_mode': 'markdown',
-    'reply_markup': reply_markup == null ? '{}' : JSON.stringify(reply_markup)
-  });
-}
-
-function replyToMessage(chatId, text, reply_to_message_id) {
-  return requestTelegramAPI('sendMessage', {
-    'chat_id': chatId,
-    'text': text,
-    reply_to_message_id,
-    'parse_mode': 'markdown'
-  });
-}
-
-function replyToSender(chatId, text, reply_markup = null) {
-  return requestTelegramAPI('sendMessage', {
-    'chat_id': chatId,
-    'text': text,
-    'parse_mode': 'markdown',
-    'reply_markup': reply_markup == null ? '{}' : JSON.stringify(reply_markup)
-  });
-}
-
-function requestTelegramAPI(method, data) {
-  var options = {
-    'method': 'post',
-    'contentType': 'application/json',
-    'payload': JSON.stringify(data),
-    'muteHttpExceptions': true
-  };
-  try {
-    return JSON.parse(UrlFetchApp.fetch(API_URL + method, options));
-  } catch (error) {
-    Logger.log(error);
-  }
-}
-
-function telegramError() {
-  var result = requestTelegramAPI('getWebhookInfo', {});
-  Logger.log(result);
-}
-
-function deleteWebhook() {
-  var result = requestTelegramAPI('deleteWebhook', {
-    drop_pending_updates: true
-  });
-  Logger.log(result);
-}
-
-function setWebhook() {
-  var result = requestTelegramAPI('setWebhook', {
-    url: WEBHOOK_URL,
-  });
-  Logger.log(result);
 }
 
 // Utilities
@@ -283,7 +247,7 @@ function saveRequest(update) {
 
   var date = getCurrentDate();
   var chatId = chat.id;
-  var name = chat.first_name + ((chat.last_name) ? " " + chat.last_name : "");
+  var name = chat.first_name + (chat.last_name ? " " + chat.last_name : "");
   var username = chat.username;
   var message = update.message.text;
   sheet.appendRow([date, chatId, name, username, message]);
@@ -293,539 +257,539 @@ function saveRequest(update) {
 
 const languages = [
   {
-    "name": "Afrikaans",
-    "code": "af"
+    name: "Afrikaans",
+    code: "af",
   },
   {
-    "name": "Albanian",
-    "code": "sq"
+    name: "Albanian",
+    code: "sq",
   },
   {
-    "name": "Amharic",
-    "code": "am"
+    name: "Amharic",
+    code: "am",
   },
   {
-    "name": "Arabic",
-    "code": "ar"
+    name: "Arabic",
+    code: "ar",
   },
   {
-    "name": "Armenian",
-    "code": "hy"
+    name: "Armenian",
+    code: "hy",
   },
   {
-    "name": "Assamese*",
-    "code": "as"
+    name: "Assamese*",
+    code: "as",
   },
   {
-    "name": "Aymara*",
-    "code": "ay"
+    name: "Aymara*",
+    code: "ay",
   },
   {
-    "name": "Azerbaijani",
-    "code": "az"
+    name: "Azerbaijani",
+    code: "az",
   },
   {
-    "name": "Bambara*",
-    "code": "bm"
+    name: "Bambara*",
+    code: "bm",
   },
   {
-    "name": "Basque",
-    "code": "eu"
+    name: "Basque",
+    code: "eu",
   },
   {
-    "name": "Belarusian",
-    "code": "be"
+    name: "Belarusian",
+    code: "be",
   },
   {
-    "name": "Bengali",
-    "code": "bn"
+    name: "Bengali",
+    code: "bn",
   },
   {
-    "name": "Bhojpuri*",
-    "code": "bho"
+    name: "Bhojpuri*",
+    code: "bho",
   },
   {
-    "name": "Bosnian",
-    "code": "bs"
+    name: "Bosnian",
+    code: "bs",
   },
   {
-    "name": "Bulgarian",
-    "code": "bg"
+    name: "Bulgarian",
+    code: "bg",
   },
   {
-    "name": "Catalan",
-    "code": "ca"
+    name: "Catalan",
+    code: "ca",
   },
   {
-    "name": "Cebuano",
-    "code": "ceb"
+    name: "Cebuano",
+    code: "ceb",
   },
   {
-    "name": "Chinese (Simplified)",
-    "code": "zh-CN"
+    name: "Chinese (Simplified)",
+    code: "zh-CN",
   },
   {
-    "name": "Chinese (Traditional)",
-    "code": "zh-TW"
+    name: "Chinese (Traditional)",
+    code: "zh-TW",
   },
   {
-    "name": "Corsican",
-    "code": "co"
+    name: "Corsican",
+    code: "co",
   },
   {
-    "name": "Croatian",
-    "code": "hr"
+    name: "Croatian",
+    code: "hr",
   },
   {
-    "name": "Czech",
-    "code": "cs"
+    name: "Czech",
+    code: "cs",
   },
   {
-    "name": "Danish",
-    "code": "da"
+    name: "Danish",
+    code: "da",
   },
   {
-    "name": "Dhivehi*",
-    "code": "dv"
+    name: "Dhivehi*",
+    code: "dv",
   },
   {
-    "name": "Dogri*",
-    "code": "doi"
+    name: "Dogri*",
+    code: "doi",
   },
   {
-    "name": "Dutch",
-    "code": "nl"
+    name: "Dutch",
+    code: "nl",
   },
   {
-    "name": "English",
-    "code": "en"
+    name: "English",
+    code: "en",
   },
   {
-    "name": "Esperanto",
-    "code": "eo"
+    name: "Esperanto",
+    code: "eo",
   },
   {
-    "name": "Estonian",
-    "code": "et"
+    name: "Estonian",
+    code: "et",
   },
   {
-    "name": "Ewe*",
-    "code": "ee"
+    name: "Ewe*",
+    code: "ee",
   },
   {
-    "name": "Filipino (Tagalog)",
-    "code": "fil"
+    name: "Filipino (Tagalog)",
+    code: "fil",
   },
   {
-    "name": "Finnish",
-    "code": "fi"
+    name: "Finnish",
+    code: "fi",
   },
   {
-    "name": "French",
-    "code": "fr"
+    name: "French",
+    code: "fr",
   },
   {
-    "name": "Frisian",
-    "code": "fy"
+    name: "Frisian",
+    code: "fy",
   },
   {
-    "name": "Galician",
-    "code": "gl"
+    name: "Galician",
+    code: "gl",
   },
   {
-    "name": "Georgian",
-    "code": "ka"
+    name: "Georgian",
+    code: "ka",
   },
   {
-    "name": "German",
-    "code": "de"
+    name: "German",
+    code: "de",
   },
   {
-    "name": "Greek",
-    "code": "el"
+    name: "Greek",
+    code: "el",
   },
   {
-    "name": "Guarani*",
-    "code": "gn"
+    name: "Guarani*",
+    code: "gn",
   },
   {
-    "name": "Gujarati",
-    "code": "gu"
+    name: "Gujarati",
+    code: "gu",
   },
   {
-    "name": "Haitian Creole",
-    "code": "ht"
+    name: "Haitian Creole",
+    code: "ht",
   },
   {
-    "name": "Hausa",
-    "code": "ha"
+    name: "Hausa",
+    code: "ha",
   },
   {
-    "name": "Hawaiian",
-    "code": "haw"
+    name: "Hawaiian",
+    code: "haw",
   },
   {
-    "name": "Hebrew",
-    "code": "he"
+    name: "Hebrew",
+    code: "he",
   },
   {
-    "name": "Hindi",
-    "code": "hi"
+    name: "Hindi",
+    code: "hi",
   },
   {
-    "name": "Hmong",
-    "code": "hmn"
+    name: "Hmong",
+    code: "hmn",
   },
   {
-    "name": "Hungarian",
-    "code": "hu"
+    name: "Hungarian",
+    code: "hu",
   },
   {
-    "name": "Icelandic",
-    "code": "is"
+    name: "Icelandic",
+    code: "is",
   },
   {
-    "name": "Igbo",
-    "code": "ig"
+    name: "Igbo",
+    code: "ig",
   },
   {
-    "name": "Ilocano*",
-    "code": "ilo"
+    name: "Ilocano*",
+    code: "ilo",
   },
   {
-    "name": "Indonesian",
-    "code": "id"
+    name: "Indonesian",
+    code: "id",
   },
   {
-    "name": "Irish",
-    "code": "ga"
+    name: "Irish",
+    code: "ga",
   },
   {
-    "name": "Italian",
-    "code": "it"
+    name: "Italian",
+    code: "it",
   },
   {
-    "name": "Japanese",
-    "code": "ja"
+    name: "Japanese",
+    code: "ja",
   },
   {
-    "name": "Javanese",
-    "code": "jv"
+    name: "Javanese",
+    code: "jv",
   },
   {
-    "name": "Kannada",
-    "code": "kn"
+    name: "Kannada",
+    code: "kn",
   },
   {
-    "name": "Kazakh",
-    "code": "kk"
+    name: "Kazakh",
+    code: "kk",
   },
   {
-    "name": "Khmer",
-    "code": "km"
+    name: "Khmer",
+    code: "km",
   },
   {
-    "name": "Kinyarwanda",
-    "code": "rw"
+    name: "Kinyarwanda",
+    code: "rw",
   },
   {
-    "name": "Konkani*",
-    "code": "gom"
+    name: "Konkani*",
+    code: "gom",
   },
   {
-    "name": "Korean",
-    "code": "ko"
+    name: "Korean",
+    code: "ko",
   },
   {
-    "name": "Krio*",
-    "code": "kri"
+    name: "Krio*",
+    code: "kri",
   },
   {
-    "name": "Kurdish",
-    "code": "ku"
+    name: "Kurdish",
+    code: "ku",
   },
   {
-    "name": "Kurdish (Sorani)*",
-    "code": "ckb"
+    name: "Kurdish (Sorani)*",
+    code: "ckb",
   },
   {
-    "name": "Kyrgyz",
-    "code": "ky"
+    name: "Kyrgyz",
+    code: "ky",
   },
   {
-    "name": "Lao",
-    "code": "lo"
+    name: "Lao",
+    code: "lo",
   },
   {
-    "name": "Latin",
-    "code": "la"
+    name: "Latin",
+    code: "la",
   },
   {
-    "name": "Latvian",
-    "code": "lv"
+    name: "Latvian",
+    code: "lv",
   },
   {
-    "name": "Lingala*",
-    "code": "ln"
+    name: "Lingala*",
+    code: "ln",
   },
   {
-    "name": "Lithuanian",
-    "code": "lt"
+    name: "Lithuanian",
+    code: "lt",
   },
   {
-    "name": "Luganda*",
-    "code": "lg"
+    name: "Luganda*",
+    code: "lg",
   },
   {
-    "name": "Luxembourgish",
-    "code": "lb"
+    name: "Luxembourgish",
+    code: "lb",
   },
   {
-    "name": "Macedonian",
-    "code": "mk"
+    name: "Macedonian",
+    code: "mk",
   },
   {
-    "name": "Maithili*",
-    "code": "mai"
+    name: "Maithili*",
+    code: "mai",
   },
   {
-    "name": "Malagasy",
-    "code": "mg"
+    name: "Malagasy",
+    code: "mg",
   },
   {
-    "name": "Malay",
-    "code": "ms"
+    name: "Malay",
+    code: "ms",
   },
   {
-    "name": "Malayalam",
-    "code": "ml"
+    name: "Malayalam",
+    code: "ml",
   },
   {
-    "name": "Maltese",
-    "code": "mt"
+    name: "Maltese",
+    code: "mt",
   },
   {
-    "name": "Maori",
-    "code": "mi"
+    name: "Maori",
+    code: "mi",
   },
   {
-    "name": "Marathi",
-    "code": "mr"
+    name: "Marathi",
+    code: "mr",
   },
   {
-    "name": "Meiteilon (Manipuri)*",
-    "code": "mni-Mtei"
+    name: "Meiteilon (Manipuri)*",
+    code: "mni-Mtei",
   },
   {
-    "name": "Mizo*",
-    "code": "lus"
+    name: "Mizo*",
+    code: "lus",
   },
   {
-    "name": "Mongolian",
-    "code": "mn"
+    name: "Mongolian",
+    code: "mn",
   },
   {
-    "name": "Myanmar (Burmese)",
-    "code": "my"
+    name: "Myanmar (Burmese)",
+    code: "my",
   },
   {
-    "name": "Nepali",
-    "code": "ne"
+    name: "Nepali",
+    code: "ne",
   },
   {
-    "name": "Norwegian",
-    "code": "no"
+    name: "Norwegian",
+    code: "no",
   },
   {
-    "name": "Nyanja (Chichewa)",
-    "code": "ny"
+    name: "Nyanja (Chichewa)",
+    code: "ny",
   },
   {
-    "name": "Odia (Oriya)",
-    "code": "or"
+    name: "Odia (Oriya)",
+    code: "or",
   },
   {
-    "name": "Oromo*",
-    "code": "om"
+    name: "Oromo*",
+    code: "om",
   },
   {
-    "name": "Pashto",
-    "code": "ps"
+    name: "Pashto",
+    code: "ps",
   },
   {
-    "name": "Persian",
-    "code": "fa"
+    name: "Persian",
+    code: "fa",
   },
   {
-    "name": "Polish",
-    "code": "pl"
+    name: "Polish",
+    code: "pl",
   },
   {
-    "name": "Portuguese (Portugal, Brazil)",
-    "code": "pt"
+    name: "Portuguese (Portugal, Brazil)",
+    code: "pt",
   },
   {
-    "name": "Punjabi",
-    "code": "pa"
+    name: "Punjabi",
+    code: "pa",
   },
   {
-    "name": "Quechua*",
-    "code": "qu"
+    name: "Quechua*",
+    code: "qu",
   },
   {
-    "name": "Romanian",
-    "code": "ro"
+    name: "Romanian",
+    code: "ro",
   },
   {
-    "name": "Russian",
-    "code": "ru"
+    name: "Russian",
+    code: "ru",
   },
   {
-    "name": "Samoan",
-    "code": "sm"
+    name: "Samoan",
+    code: "sm",
   },
   {
-    "name": "Sanskrit*",
-    "code": "sa"
+    name: "Sanskrit*",
+    code: "sa",
   },
   {
-    "name": "Scots Gaelic",
-    "code": "gd"
+    name: "Scots Gaelic",
+    code: "gd",
   },
   {
-    "name": "Sepedi*",
-    "code": "nso"
+    name: "Sepedi*",
+    code: "nso",
   },
   {
-    "name": "Serbian",
-    "code": "sr"
+    name: "Serbian",
+    code: "sr",
   },
   {
-    "name": "Sesotho",
-    "code": "st"
+    name: "Sesotho",
+    code: "st",
   },
   {
-    "name": "Shona",
-    "code": "sn"
+    name: "Shona",
+    code: "sn",
   },
   {
-    "name": "Sindhi",
-    "code": "sd"
+    name: "Sindhi",
+    code: "sd",
   },
   {
-    "name": "Sinhala (Sinhalese)",
-    "code": "si"
+    name: "Sinhala (Sinhalese)",
+    code: "si",
   },
   {
-    "name": "Slovak",
-    "code": "sk"
+    name: "Slovak",
+    code: "sk",
   },
   {
-    "name": "Slovenian",
-    "code": "sl"
+    name: "Slovenian",
+    code: "sl",
   },
   {
-    "name": "Somali",
-    "code": "so"
+    name: "Somali",
+    code: "so",
   },
   {
-    "name": "Spanish",
-    "code": "es"
+    name: "Spanish",
+    code: "es",
   },
   {
-    "name": "Sundanese",
-    "code": "su"
+    name: "Sundanese",
+    code: "su",
   },
   {
-    "name": "Swahili",
-    "code": "sw"
+    name: "Swahili",
+    code: "sw",
   },
   {
-    "name": "Swedish",
-    "code": "sv"
+    name: "Swedish",
+    code: "sv",
   },
   {
-    "name": "Tagalog (Filipino)",
-    "code": "tl"
+    name: "Tagalog (Filipino)",
+    code: "tl",
   },
   {
-    "name": "Tajik",
-    "code": "tg"
+    name: "Tajik",
+    code: "tg",
   },
   {
-    "name": "Tamil",
-    "code": "ta"
+    name: "Tamil",
+    code: "ta",
   },
   {
-    "name": "Tatar",
-    "code": "tt"
+    name: "Tatar",
+    code: "tt",
   },
   {
-    "name": "Telugu",
-    "code": "te"
+    name: "Telugu",
+    code: "te",
   },
   {
-    "name": "Thai",
-    "code": "th"
+    name: "Thai",
+    code: "th",
   },
   {
-    "name": "Tigrinya*",
-    "code": "ti"
+    name: "Tigrinya*",
+    code: "ti",
   },
   {
-    "name": "Tsonga*",
-    "code": "ts"
+    name: "Tsonga*",
+    code: "ts",
   },
   {
-    "name": "Turkish",
-    "code": "tr"
+    name: "Turkish",
+    code: "tr",
   },
   {
-    "name": "Turkmen",
-    "code": "tk"
+    name: "Turkmen",
+    code: "tk",
   },
   {
-    "name": "Twi (Akan)*",
-    "code": "ak"
+    name: "Twi (Akan)*",
+    code: "ak",
   },
   {
-    "name": "Ukrainian",
-    "code": "uk"
+    name: "Ukrainian",
+    code: "uk",
   },
   {
-    "name": "Urdu",
-    "code": "ur"
+    name: "Urdu",
+    code: "ur",
   },
   {
-    "name": "Uyghur",
-    "code": "ug"
+    name: "Uyghur",
+    code: "ug",
   },
   {
-    "name": "Uzbek",
-    "code": "uz"
+    name: "Uzbek",
+    code: "uz",
   },
   {
-    "name": "Vietnamese",
-    "code": "vi"
+    name: "Vietnamese",
+    code: "vi",
   },
   {
-    "name": "Welsh",
-    "code": "cy"
+    name: "Welsh",
+    code: "cy",
   },
   {
-    "name": "Xhosa",
-    "code": "xh"
+    name: "Xhosa",
+    code: "xh",
   },
   {
-    "name": "Yiddish",
-    "code": "yi"
+    name: "Yiddish",
+    code: "yi",
   },
   {
-    "name": "Yoruba",
-    "code": "yo"
+    name: "Yoruba",
+    code: "yo",
   },
   {
-    "name": "Zulu",
-    "code": "zu"
-  }
+    name: "Zulu",
+    code: "zu",
+  },
 ];
