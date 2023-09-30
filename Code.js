@@ -4,20 +4,8 @@ const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/`;
 const BMC_URL = "https://www.buymeacoffee.com/mdnaimur";
 const DEV_CHAT_ID = "1493956826";
 const userSheet = SpreadsheetApp.openById(
-  "1C7cNMlG468pAqN9pYllYR15ZjCR0rJi3Jh42R7lD670"
+  "YOUR_SHEET_ID"
 ).getSheetByName("Users");
-
-// For local work
-// const { tgbot } = require("google-apps-script-telegram-bot-library");
-// var bot = new tgbot(BOT_TOKEN);
-
-// For google apps script
-var bot = new TGbot.tgbot(BOT_TOKEN);
-
-function test() {
-  var text = "Sorry for the inconvenience. You can use me now!";
-  bot.sendMessage({ chat_id: "6008069783", text: text });
-}
 
 function doPost(e) {
   if (!e.postData || !e.postData.contents) return;
@@ -32,12 +20,12 @@ function doPost(e) {
 
 function handleCommand(update) {
   var command = update.message.text;
-  var chatId = update.message.from.id;
+  var chatId = update.message.chat.id;
   if (command == "/start") {
     bot.sendMessage({
       chat_id: chatId,
       text: "Hello there! I'm your personal language translator. From any language to any other, I'm here to facilitate your linguistic journey. \n\nTo know how to translate, use /help.",
-    });
+    });t
     addOrUpdateUser(
       chatId,
       update.message.from.first_name,
@@ -84,7 +72,7 @@ function handleCommand(update) {
 function handleNonCommand(update) {
   var message = update.message;
   var msgId = message.message_id;
-  var chatId = message.from.id;
+  var chatId = message.chat.id;
   var text = message.text;
   var response = "Sorry! I couldn't translate your text. 😔";
   var reply_markup = "";
@@ -123,7 +111,7 @@ function handleNonCommand(update) {
 
 function handleCallbackQuery(query) {
   var from = query.from;
-  var chatId = from.id;
+  var chatId = query.message.chat.id;
   var msgId = query.message.message_id;
   var queryId = query.callback_query_id;
   var data = query.data;
