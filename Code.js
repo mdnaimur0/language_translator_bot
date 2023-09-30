@@ -2,9 +2,7 @@ const BOT_TOKEN =
   PropertiesService.getScriptProperties().getProperty("botToken");
 const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}/`;
 const BMC_URL = "https://www.buymeacoffee.com/mdnaimur";
-const WEBHOOK_URL =
-  "https://script.google.com/macros/s/AKfycbwxgW8ur_JH19DdjKA96aBN0r74JkYEkiWvXfOA9rDvk0rg-GS6AKPNxT_e8w0Z37Xs4w/exec";
-
+const DEV_CHAT_ID = "1493956826";
 const userSheet = SpreadsheetApp.openById(
   "1C7cNMlG468pAqN9pYllYR15ZjCR0rJi3Jh42R7lD670"
 ).getSheetByName("Users");
@@ -17,8 +15,8 @@ const userSheet = SpreadsheetApp.openById(
 var bot = new TGbot.tgbot(BOT_TOKEN);
 
 function test() {
-  var text = Math.ceil(5.01);
-  Logger.log(text);
+  var text = "Sorry for the inconvenience. You can use me now!";
+  bot.sendMessage({ chat_id: "6008069783", text: text });
 }
 
 function doPost(e) {
@@ -38,8 +36,13 @@ function handleCommand(update) {
   if (command == "/start") {
     bot.sendMessage({
       chat_id: chatId,
-      text: "Hello there, I can translate text for you from any language to another.",
+      text: "Hello there! I'm your personal language translator. From any language to any other, I'm here to facilitate your linguistic journey. \n\nTo know how to translate, use /help.",
     });
+    addOrUpdateUser(
+      chatId,
+      update.message.from.first_name,
+      update.message.from.last_name
+    );
   } else if (command == "/set") {
     bot.sendMessage({
       chat_id: chatId,
@@ -47,23 +50,27 @@ function handleCommand(update) {
       reply_markup: getLanguageButtonsMarkup(1, chatId),
     });
   } else if (command == "/list") {
+    sendTyping(chatId);
     var text = "";
     languages.forEach((lang) => {
-      text = text + "\n" + lang.code + " -> " + lang.name;
+      text = text + "\n<code>" + lang.code + "</code> --> " + lang.name;
     });
     bot.sendMessage({
       chat_id: chatId,
-      text: `All supported languages are listed here:\n<b>Language Code -> Language name</b>\n ${text}`,
+      text: `List of supported languages:\n ${text}`,
       parse_mode: "html",
     });
   } else if (command == "/remove") {
     resetDefaultLanguage(chatId);
     bot.sendMessage({
       chat_id: chatId,
-      text: "Custom language removed and translation language is reset to English (en)",
+      text: "Default translation language reset to English (en)",
     });
   } else if (command == "/help") {
-    var text = `Hi ${update.message.from.first_name},\n\nYou can send me any text that you want to translate. Please follow the following format.\n\n\`text to translate | language-code\`\n\nExample: \`Hello there | bn\`\n\nUse /list to know language codes.\n\n_If you do not specify any language code, the given text will be translated to English or the default language you have set using_ /set.`;
+    sendTyping(chatId);
+    var text =
+      `Hi ${update.message.from.first_name},\n\n` +
+      "Simply send me any text you'd like to translate in the following format:\n\n`text-to-translate | language-code`\n\nFor example: `Hello there | bn`\n\nTo view language codes, use the command /list.\n\n_If no language code is specified, the text will be translated to English or your default language set with_ /set.";
     bot.sendMessage({ chat_id: chatId, text: text, parse_mode: "markdown" });
   } else {
     bot.sendMessage({
@@ -79,22 +86,26 @@ function handleNonCommand(update) {
   var msgId = message.message_id;
   var chatId = message.from.id;
   var text = message.text;
-  var response = "Sorry! I couldn't translate your text.";
+  var response = "Sorry! I couldn't translate your text. 😔";
+  var reply_markup = "";
   if (text) {
     var textToTranslate = text;
     var toLang = "";
-    if (text.includes("|")) {
-      var split = text.split("|");
-      textToTranslate = split[0].trim();
-      toLang = split[1].trim();
+    var index = text.lastIndexOf("|");
+    if (index > 0) {
+      textToTranslate = text.substring(0, index).trim();
+      toLang = text.substring(index + 1).trim();
     } else {
       toLang = getDefaultLanguage(chatId);
     }
-    if (textToTranslate.trim() === "") {
+    if (textToTranslate.trim() == "") {
       response = "No text to translate!";
     } else {
       try {
         response = LanguageApp.translate(textToTranslate, "", toLang);
+        reply_markup = {
+          inline_keyboard: [[{ text: "💰 Donate", callback_data: "/donate" }]],
+        };
       } catch (error) {
         Logger.log(error);
       }
@@ -106,6 +117,7 @@ function handleNonCommand(update) {
     chat_id: chatId,
     reply_to_message_id: msgId,
     text: response,
+    reply_markup: reply_markup,
   });
 }
 
@@ -113,22 +125,20 @@ function handleCallbackQuery(query) {
   var from = query.from;
   var chatId = from.id;
   var msgId = query.message.message_id;
-  var name = from.first_name + (from.last_name ? " " + from.last_name : "");
+  var queryId = query.callback_query_id;
   var data = query.data;
   if (data.startsWith("/set")) {
-    var langCode = data.substr(5);
+    var langCode = data.substring(5);
     var offset = parseInt(langCode);
     if (offset) {
-      bot.editMessageText({
+      bot.editMessageReplyMarkup({
         chat_id: chatId,
         message_id: msgId,
-        text: "Select default language for text to be translated to:",
         reply_markup: getLanguageButtonsMarkup(offset, chatId),
       });
-      bot.editMessageText()
       return;
     }
-    saveDefaultLanguage(chatId, name, langCode);
+    addOrUpdateUser(chatId, from.first_name, from.last_name, langCode);
     var langName = "";
     for (var i = 0; i < languages.length; i++) {
       if (languages[i].code == langCode) {
@@ -139,9 +149,56 @@ function handleCallbackQuery(query) {
     bot.editMessageText({
       chat_id: chatId,
       message_id: msgId,
-      text: `Successfully set the language to ${langName} (${langCode})`,
+      text: `Default translation language set to ${langName} (${langCode}) successfully.`,
     });
+  } else if (data.startsWith("/donate")) {
+    if (data.trim() == "/donate") {
+      var text = `Hello there,\n\nIf you find this translation service helpful, you can support me in keeping it free and available. Your contribution helps ensure the continued operation and improvement of this service.\n\nIf you are in Bangladesh, you can donate me through *bKash* or *Nagad*. Otherwise, you can [buy me a coffee](${BMC_URL}).`;
+      var buttons = [
+        [
+          { text: "bKash", callback_data: "/donate bkash" },
+          { text: "Nagad", callback_data: "/donate nagad" },
+        ],
+        [{ text: "Buy me a coffee", url: BMC_URL }],
+      ];
+      bot.sendMessage({
+        chat_id: chatId,
+        text: text,
+        parse_mode: "markdown",
+        disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: buttons },
+      });
+      bot.answerCallbackQuery({ callback_query_id: queryId });
+    } else if (data.includes("bkash")) {
+      bot.editMessageText({
+        chat_id: chatId,
+        message_id: msgId,
+        text: "If you're willing to donate through bKash, you can scan the [QR code](https://github.com/naimur20/naimur20.github.io/raw/main/bKash.png) to send money or you can manually do *Send Money* to this personal bKash account: `01940289890`\n\n*N.B:* _Please don't call the number._\n\nThanks for your support.",
+        parse_mode: "markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Donate through Nagad", callback_data: "/donate nagad" }],
+          ],
+        },
+      });
+    } else if (data.includes("nagad")) {
+      bot.editMessageText({
+        chat_id: chatId,
+        message_id: msgId,
+        text: "If you're willing to donate through Nagad, you can do *Send Money* to this personal Nagad account: `01940289890`\n\n*N.B:* _Please don't call the number._\n\nThanks for your support.",
+        parse_mode: "markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Donate through bKash", callback_data: "/donate bkash" }],
+          ],
+        },
+      });
+    }
   }
+}
+
+function sendTyping(chatId) {
+  bot.sendChatAction({ chat_id: chatId, action: "typing" });
 }
 
 function getLanguageButtonsMarkup(offset, chatId) {
@@ -166,13 +223,13 @@ function getLanguageButtonsMarkup(offset, chatId) {
   buttons.push(row);
   row = [];
   if (offset > 1) {
-    row.push({ text: "<-", callback_data: `/set ${offset - 1}` });
+    row.push({ text: "⬅️", callback_data: `/set ${offset - 1}` });
   }
   if (offset < Math.ceil(languages.length / 24)) {
-    row.push({ text: "->", callback_data: `/set ${offset + 1}` });
+    row.push({ text: "➡️", callback_data: `/set ${offset + 1}` });
   }
   buttons.push(row);
-  return { 'inline_keyboard': buttons };
+  return { inline_keyboard: buttons };
 }
 
 function getLanguageList(offset) {
@@ -185,15 +242,19 @@ function getLanguageList(offset) {
   }
 }
 
-// sheet realted methods
+// sheet related methods
 
-function saveDefaultLanguage(chatId, userName, language) {
+function addOrUpdateUser(chatId, fname, lname, language) {
+  var name = fname + (lname ? " " + lname : "");
   var chatIdColumn = userSheet.getRange("A:A").getValues().flat();
   var index = chatIdColumn.indexOf(chatId);
   if (index > -1) {
-    userSheet.getRange(index + 1, 3).setValue(language);
+    userSheet.getRange(index + 1, 2).setValue(name);
+    if (language != undefined) {
+      userSheet.getRange(index + 1, 3).setValue(language);
+    }
   } else {
-    userSheet.appendRow([chatId, userName, language]);
+    userSheet.appendRow([chatId, name, language]);
   }
 }
 
@@ -202,7 +263,9 @@ function getDefaultLanguage(chatId) {
   var defaultLanguageColumn = userSheet.getRange("C:C").getValues().flat();
   var index = chatIdColumn.indexOf(chatId);
   if (index > -1) {
-    return defaultLanguageColumn[index];
+    var lang = defaultLanguageColumn[index];
+    if (lang.toString().trim() == "") return "en";
+    else return lang;
   }
   return "en";
 }
